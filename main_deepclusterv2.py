@@ -158,18 +158,24 @@ def main():
     logger.info("Building model done.")
 
     # build optimizer
+    # base_lr=4.8 wd=1e-6
     optimizer = torch.optim.SGD(
         model.parameters(),
         lr=args.base_lr,
         momentum=0.9,
         weight_decay=args.wd,
     )
+    # Using Dist LARC Optimizer
     optimizer = LARC(optimizer=optimizer, trust_coefficient=0.001, clip=False)
+
+    # LR Scheduling
     warmup_lr_schedule = np.linspace(args.start_warmup, args.base_lr, len(train_loader) * args.warmup_epochs)
     iters = np.arange(len(train_loader) * (args.epochs - args.warmup_epochs))
     cosine_lr_schedule = np.array([args.final_lr + 0.5 * (args.base_lr - args.final_lr) * (1 + \
                          math.cos(math.pi * t / (len(train_loader) * (args.epochs - args.warmup_epochs)))) for t in iters])
     lr_schedule = np.concatenate((warmup_lr_schedule, cosine_lr_schedule))
+
+
     logger.info("Building optimizer done.")
 
     # wrap model
@@ -276,6 +282,7 @@ def train(loader, model, optimizer, epoch, schedule, local_memory_index, local_m
         # ============ backward and optim step ... ============
         optimizer.zero_grad()
         loss.backward()
+
         # cancel some gradients
         if iteration < args.freeze_prototypes_niters:
             for name, p in model.named_parameters():
